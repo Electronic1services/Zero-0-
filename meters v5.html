@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>خريطة العدادات الصفرية</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal-950:#0a2e2e;
+    --teal-900:#0f3d3d;
+    --teal-700:#155e5e;
+    --teal-500:#1d8a8a;
+    --amber-500:#d97b1f;
+    --amber-100:#fce9d2;
+    --sand-50:#f6f4ef;
+    --ink:#1c2624;
+    --line:#e2e0d8;
+    --on-color:#1d8a4a;
+    --off-color:#c23b3b;
+    --shadow: 0 8px 28px rgba(10,46,46,.18);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    font-family:'Tajawal',sans-serif;
+    background:var(--sand-50);
+    color:var(--ink);
+    overscroll-behavior:none;
+  }
+  #app{
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+  }
+
+  /* ---- Top bar ---- */
+  #topbar{
+    background:var(--teal-950);
+    color:#fff;
+    padding:10px 12px;
+    display:flex; flex-direction:column; gap:8px;
+    z-index:1200;
+    box-shadow:var(--shadow);
+  }
+  #topbar .row1{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  #topbar h1{
+    font-size:16px; font-weight:900; margin:0;
+    display:flex; align-items:center; gap:6px;
+  }
+  #topbar h1 .count{
+    font-weight:500; font-size:12px; color:#bfe3e3;
+  }
+  #empName{
+    background:var(--teal-900);
+    border:1px solid var(--teal-700);
+    color:#fff;
+    border-radius:10px;
+    padding:8px 10px;
+    font-family:'Tajawal',sans-serif;
+    font-size:13px;
+    width:130px;
+    text-align:right;
+  }
+  #empName::placeholder{color:#8fbcbc;}
+  #searchRow{
+    display:flex; gap:8px;
+  }
+  #searchBox{
+    flex:1;
+    padding:10px 12px;
+    border-radius:12px;
+    border:none;
+    font-family:'Tajawal',sans-serif;
+    font-size:14px;
+    background:#fff;
+    color:var(--ink);
+  }
+  #searchBox:focus{outline:2px solid var(--amber-500);}
+  #filterBtn{
+    background:var(--teal-700);
+    border:1px solid var(--teal-500);
+    color:#fff;
+    border-radius:12px;
+    padding:0 14px;
+    font-size:13px;
+    font-family:'Tajawal',sans-serif;
+    white-space:nowrap;
+  }
+  #filterBtn.active{background:var(--amber-500); border-color:var(--amber-500);}
+
+  #searchResults{
+    position:absolute; top:96px; right:12px; left:12px;
+    background:#fff; border-radius:12px; box-shadow:var(--shadow);
+    max-height:45vh; overflow:auto; z-index:1300; display:none;
+  }
+  #searchResults .item{
+    padding:10px 12px; border-bottom:1px solid var(--line);
+    font-size:13px; cursor:pointer;
+  }
+  #searchResults .item:active{background:var(--amber-100);}
+  #searchResults .item b{color:var(--teal-900);}
+  #searchResults .item .sub{color:#767; color:#6b7370; font-size:12px; margin-top:2px;}
+  #searchResults .empty{padding:14px; text-align:center; color:#888; font-size:13px;}
+
+  /* ---- Map ---- */
+  #map{flex:1; width:100%;}
+  .leaflet-control-attribution{font-size:9px;}
+
+  /* Safety-net Leaflet core styles: if the external leaflet.css is slow to load or briefly
+     blocked on some networks, these essential rules keep the map itself sized, clipped, and
+     interactive (tiles positioned correctly, controls tappable) until the full stylesheet arrives. */
+  .leaflet-container{ position:relative; overflow:hidden; -webkit-tap-highlight-color:transparent; background:#ddd; outline:0; touch-action:pan-x pan-y; }
+  .leaflet-container a{ color:#0078A8; }
+  .leaflet-pane{ z-index:400; }
+  .leaflet-tile-pane{ z-index:200; }
+  .leaflet-overlay-pane{ z-index:400; }
+  .leaflet-marker-pane{ z-index:600; }
+  .leaflet-popup-pane{ z-index:700; }
+  .leaflet-map-pane canvas{ z-index:100; }
+  .leaflet-map-pane svg{ z-index:200; }
+  .leaflet-tile-pane, .leaflet-map-pane, .leaflet-marker-pane, .leaflet-overlay-pane, .leaflet-popup-pane, .leaflet-shadow-pane{ position:absolute; left:0; top:0; }
+  .leaflet-tile{ position:absolute; width:256px; height:256px; user-select:none; -webkit-user-drag:none; }
+  .leaflet-control-container .leaflet-top, .leaflet-control-container .leaflet-bottom{ position:absolute; z-index:1000; pointer-events:none; }
+  .leaflet-top{ top:0; } .leaflet-right{ right:0; } .leaflet-bottom{ bottom:0; } .leaflet-left{ left:0; }
+  .leaflet-control{ pointer-events:auto; float:left; clear:both; margin:10px; }
+  .leaflet-bar{ background:#fff; border-radius:6px; box-shadow:0 1px 5px rgba(0,0,0,.4); }
+  .leaflet-bar a{ display:block; width:30px; height:30px; line-height:30px; text-align:center; text-decoration:none; color:#333; font-size:18px; }
+  .leaflet-marker-icon, .leaflet-marker-shadow{ position:absolute; }
+
+  .meter-pin{
+    width:26px; height:26px; border-radius:50% 50% 50% 0;
+    transform:rotate(-45deg);
+    box-shadow:0 2px 6px rgba(0,0,0,.35);
+    border:2px solid #fff;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .meter-pin.on{background:var(--on-color);}
+  .meter-pin.off{background:var(--off-color);}
+  .meter-pin .dot{
+    width:8px; height:8px; border-radius:50%;
+    background:#fff; transform:rotate(45deg);
+  }
+  .marker-cluster-custom{
+    background:var(--teal-900); color:#fff; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Tajawal',sans-serif; font-weight:700; font-size:13px;
+    border:3px solid rgba(255,255,255,.85);
+    box-shadow:0 2px 8px rgba(0,0,0,.3);
+  }
+
+  /* ---- Legend ---- */
+  #legend{
+    position:absolute; bottom:16px; left:10px; z-index:900;
+    background:rgba(255,255,255,.95); border-radius:10px;
+    padding:8px 10px; font-size:12px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:4px;
+  }
+  #legend .l{display:flex; align-items:center; gap:6px;}
+  #legend .sw{width:10px; height:10px; border-radius:50%;}
+
+  #locateBtn{
+    position:absolute; bottom:16px; right:10px; z-index:900;
+    width:44px; height:44px; border-radius:50%;
+    background:#fff; box-shadow:var(--shadow); border:none;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px;
+  }
+
+  /* ---- Bottom sheet ---- */
+  #overlay{
+    position:fixed; inset:0; background:rgba(10,20,20,.45);
+    z-index:1400; display:none;
+  }
+  #sheet{
+    position:fixed; right:0; left:0; bottom:0; z-index:1500;
+    background:#fff; border-radius:18px 18px 0 0;
+    box-shadow:0 -8px 30px rgba(0,0,0,.3);
+    max-height:88vh; overflow:auto;
+    transform:translateY(100%);
+    transition:transform .25s ease;
+    padding-bottom:24px;
+  }
+  #sheet.open{transform:translateY(0);}
+  #sheetHandle{
+    display:flex; justify-content:center; padding:10px 0 4px;
+  }
+  #sheetHandle span{width:40px; height:4px; border-radius:3px; background:var(--line);}
+
+  #sheetHeader{
+    padding:4px 18px 12px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:flex-start; gap:10px;
+  }
+  #sheetHeader .status-badge{
+    font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px;
+    color:#fff; white-space:nowrap;
+  }
+  .status-badge.on{background:var(--on-color);}
+  .status-badge.off{background:var(--off-color);}
+  #sheetHeader h2{margin:0 0 4px; font-size:17px; color:var(--teal-950);}
+  #sheetHeader .meterid{font-size:13px; color:#666;}
+
+  .infoGrid{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+    padding:12px 18px; border-bottom:1px solid var(--line);
+  }
+  .infoGrid .cell{
+    background:var(--sand-50); border-radius:10px; padding:8px 10px;
+  }
+  .infoGrid .cell .label{font-size:11px; color:#8a8f8c;}
+  .infoGrid .cell .val{font-size:14px; font-weight:700; color:var(--ink); margin-top:2px;}
+
+  #gmapBtn{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    margin:14px 18px 6px;
+    background:var(--teal-950); color:#fff; text-decoration:none;
+    padding:13px; border-radius:12px; font-weight:700; font-size:14px;
+  }
+  #gmapBtn:active{background:var(--teal-700);}
+
+  #sheetBody{padding:14px 18px;}
+  #sheetBody h3{font-size:14px; margin:0 0 8px; color:var(--teal-900);}
+
+  #noteText{
+    width:100%; min-height:80px; border-radius:12px;
+    border:1.5px solid var(--line); padding:10px 12px;
+    font-family:'Tajawal',sans-serif; font-size:14px; resize:vertical;
+  }
+  #noteText:focus{outline:none; border-color:var(--amber-500);}
+
+  #photoRow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .photoLabel{
+    display:flex; align-items:center; gap:6px;
+    background:var(--sand-50); border:1.5px dashed var(--line);
+    border-radius:12px; padding:10px 14px; font-size:13px; cursor:pointer;
+    color:var(--teal-900);
+  }
+  #photoPreviewWrap{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;}
+  #photoPreviewWrap img{width:64px; height:64px; object-fit:cover; border-radius:10px; border:1px solid var(--line);}
+  .photoDel{
+    position:relative;
+  }
+  .photoDel .x{
+    position:absolute; top:-6px; left:-6px; background:var(--off-color); color:#fff;
+    width:20px; height:20px; border-radius:50%; font-size:12px; display:flex; align-items:center; justify-content:center;
+  }
+
+  #saveBtn{
+    width:100%; margin-top:14px; padding:13px; border:none; border-radius:12px;
+    background:var(--amber-500); color:#fff; font-weight:900; font-size:15px;
+    font-family:'Tajawal',sans-serif;
+  }
+  #saveBtn:active{background:#b5670f;}
+  #saveMsg{
+    text-align:center; font-size:12px; color:var(--on-color); margin-top:6px; min-height:14px;
+  }
+
+  #notesLog{margin-top:18px;}
+  .noteEntry{
+    background:var(--sand-50); border-radius:12px; padding:10px 12px; margin-bottom:8px;
+    border-right:3px solid var(--teal-500);
+  }
+  .noteEntry .meta{display:flex; justify-content:space-between; font-size:11px; color:#828a86; margin-bottom:4px;}
+  .noteEntry .meta b{color:var(--teal-900);}
+  .noteEntry .txt{font-size:13.5px; line-height:1.6;}
+  .noteEntry .imgs{display:flex; gap:6px; margin-top:6px;}
+  .noteEntry .imgs img{width:56px; height:56px; object-fit:cover; border-radius:8px;}
+  .noEntries{color:#999; font-size:13px; text-align:center; padding:10px;}
+
+  #closeSheet{
+    position:absolute; top:10px; left:14px; background:var(--sand-50);
+    border:none; border-radius:50%; width:32px; height:32px; font-size:16px; color:#666;
+  }
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:#ccc; border-radius:3px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="row1">
+      <h1>📍 خريطة العدادات الصفرية <span class="count" id="totalCount"></span></h1>
+      <input id="empName" placeholder="اسم الموظف" />
+    </div>
+    <div id="searchRow">
+      <input id="searchBox" placeholder="ابحث برقم العداد / رقم الحساب / اسم المشترك / الموقع" />
+      <button id="filterBtn">الكل</button>
+    </div>
+    <div id="searchResults"></div>
+  </div>
+
+  <div style="position:relative; flex:1;">
+    <div id="map"></div>
+    <div id="legend">
+      <div class="l"><span class="sw" style="background:var(--on-color)"></span> يعمل (ON)</div>
+      <div class="l"><span class="sw" style="background:var(--off-color)"></span> متوقف (OFF)</div>
+    </div>
+    <button id="locateBtn" title="موقعي">🎯</button>
+  </div>
+</div>
+
+<div id="overlay"></div>
+<div id="sheet">
+  <div id="sheetHandle"><span></span></div>
+  <button id="closeSheet">✕</button>
+  <div id="sheetHeader">
+    <div>
+      <h2 id="shName"></h2>
+      <div class="meterid" id="shMeter"></div>
+    </div>
+    <div class="status-badge" id="shStatus"></div>
+  </div>
+
+  <div class="infoGrid">
+    <div class="cell"><div class="label">رقم الحساب</div><div class="val" id="shAccount"></div></div>
+    <div class="cell"><div class="label">الفرع</div><div class="val" id="shBranch"></div></div>
+    <div class="cell"><div class="label">الموقع</div><div class="val" id="shPlace"></div></div>
+    <div class="cell"><div class="label">المعدل اليومي</div><div class="val" id="shAvg"></div></div>
+    <div class="cell"><div class="label">الرصيد الحالي</div><div class="val" id="shBalance"></div></div>
+    <div class="cell"><div class="label">آخر دفعة</div><div class="val" id="shLastpay"></div></div>
+  </div>
+
+  <a id="gmapBtn" href="#" target="_blank" rel="noopener">🧭 افتح الموقع في خرائط قوقل</a>
+
+  <div id="sheetBody">
+    <h3>✏️ تسجيل ملاحظة</h3>
+    <textarea id="noteText" placeholder="اكتب ملاحظتك عن هذا العداد..."></textarea>
+
+    <div id="photoRow">
+      <label class="photoLabel" for="photoInput">📷 تصوير / إرفاق صورة
+        <input type="file" id="photoInput" accept="image/*" capture="environment" multiple style="display:none">
+      </label>
+    </div>
+    <div id="photoPreviewWrap"></div>
+
+    <button id="saveBtn">💾 حفظ الملاحظة</button>
+    <div id="saveMsg"></div>
+
+    <div id="notesLog">
+      <h3>🕐 سجل الملاحظات السابقة</h3>
+      <div id="notesLogList"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<script>
+/* ============ FIREBASE ============ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCdB47KCQ_8cnUOYYFZNcPWvvpBQ_NKg6w",
+  authDomain: "meters-notes.firebaseapp.com",
+  projectId: "meters-notes",
+  storageBucket: "meters-notes.firebasestorage.app",
+  messagingSenderId: "404869981230",
+  appId: "1:404869981230:web:410b19374c14fb6dd1abbf",
+  measurementId: "G-5F4TC08021"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const notesCollection = db.collection('notes');
+
+/* ============ DATA ============ */
+const METERS = [{"account": "178622470", "name": "خالد ناصر صعفق العنزي", "branch": "الحائط", "meter": "10836274", "status": "OFF", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.994186, "lng": 40.812528}, {"account": "1371373058", "name": "سلطانه متعب سعيد البركه", "branch": "الحائط", "meter": "87839142", "status": "ON", "avg": "1.157186", "balance": "0.0", "lastpay": "6.24", "place": "الحائط", "lat": 25.98012868, "lng": 40.45844924}, {"account": "1844422272", "name": "نشمي بن عبدالله بن صالح الرشيدى", "branch": "الحائط", "meter": "88648471", "status": "ON", "avg": "0.108986", "balance": "6.23", "lastpay": "5.76", "place": "دحلة الجوازي", "lat": 26.3209966, "lng": 41.0290167}, {"account": "1187998240", "name": "محيسن الحايطى", "branch": "الحائط", "meter": "65141634", "status": "ON", "avg": "1.5", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.987981, "lng": 40.479169}, {"account": "2176759192", "name": "عيسى سعدون رشيد الحايطي", "branch": "الحائط", "meter": "55899584", "status": "ON", "avg": "0.203551", "balance": "0.0", "lastpay": "6.41", "place": "الحائط", "lat": 25.989857, "lng": 40.467586}, {"account": "3678000014", "name": "هني مسلم الطريس الرشيدي", "branch": "الحائط", "meter": "88060868", "status": "ON", "avg": "1.14377", "balance": "5.95", "lastpay": "5.75", "place": "البركة", "lat": 26.46653796, "lng": 41.0857443}, {"account": "2631395462", "name": "فاطمه محمد علي الحايطي", "branch": "الحائط", "meter": "88648644", "status": "ON", "avg": "1.25", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.99296033, "lng": 40.47189239}, {"account": "4543822554", "name": "رشيد ملفي رشيد الرشيدي", "branch": "الحائط", "meter": "88649028", "status": "ON", "avg": "0.115804", "balance": "5.95", "lastpay": "5.75", "place": "وسيطاء دليم", "lat": 26.25045479, "lng": 40.97163663}, {"account": "4567255512", "name": "رشدان ناهس فديغم الرشيدي البراك", "branch": "الحائط", "meter": "87839831", "status": "ON", "avg": "0.15782", "balance": "0.0", "lastpay": "6.08", "place": "مرغان", "lat": 26.177393, "lng": 40.930424}, {"account": "4167000014", "name": "دخيل جدعان النميش الرشيدي", "branch": "الحائط", "meter": "87966239", "status": "ON", "avg": "1.5", "balance": "47.57", "lastpay": "5.75", "place": "", "lat": 26.1837977978282, "lng": 40.9285808572512}, {"account": "4797841718", "name": "موسى دخيل جدعان الرشيدي", "branch": "الحائط", "meter": "87839138", "status": "ON", "avg": "1.036479", "balance": "5.75", "lastpay": "5.75", "place": "مرغان", "lat": 26.18414558, "lng": 40.92868253}, {"account": "4789776256", "name": "محمد علي عيسى الحايطي سعدون", "branch": "الحائط", "meter": "87966306", "status": "OFF", "avg": "0.241894", "balance": "5.89", "lastpay": "6.04", "place": "", "lat": 25.9786496827378, "lng": 40.4560342860137}, {"account": "5530667488", "name": "ابراهيم عيسى سعدون الحائطي الرشيد", "branch": "الحائط", "meter": "87966126", "status": "ON", "avg": "0.119502", "balance": "5.84", "lastpay": "5.87", "place": "", "lat": 25.97976347, "lng": 40.45907926}, {"account": "4608000014", "name": "عبدالوهاب حبيب عايض الحايطى", "branch": "الحائط", "meter": "10784790", "status": "ON", "avg": "0.086827", "balance": "6.34", "lastpay": "6.42", "place": "الحائط", "lat": 25.995667, "lng": 40.461988}, {"account": "5693009242", "name": "خالد رشيد جمعان الداموك الرشيدي", "branch": "الحائط", "meter": "31509260", "status": "OFF", "avg": "1.324048", "balance": "906.92", "lastpay": "5.55", "place": "الحماد", "lat": 26.14220198, "lng": 40.91080015}, {"account": "5799000014", "name": "رشدان ناهس فديغم الرشيدي البراك", "branch": "الحائط", "meter": "51798064", "status": "ON", "avg": "0.831911", "balance": "0.0", "lastpay": "5.75", "place": "مرغان", "lat": 26.17549383, "lng": 40.92948002}, {"account": "5167000014", "name": "طالب مصلاح مرشد الرشيدي العويمري", "branch": "الحائط", "meter": "88648259", "status": "OFF", "avg": "0.389405", "balance": "11.29", "lastpay": "5.75", "place": "الحماد", "lat": 26.14534236, "lng": 40.91219905}, {"account": "4331356108", "name": "محمد صالح محمد الرشيدي", "branch": "الحائط", "meter": "88579432", "status": "ON", "avg": "0.003242", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.98009498, "lng": 40.45870938}, {"account": "6190278074", "name": "عايد عبدالله عيد الرشيدي", "branch": "الحائط", "meter": "88579228", "status": "ON", "avg": "0.003046", "balance": "5.95", "lastpay": "5.78", "place": "ام شعاري", "lat": 25.87178563, "lng": 40.23401088}, {"account": "4997683184", "name": "راضي عبدالرحمن مسعود الرشيدي", "branch": "الحائط", "meter": "88648312", "status": "ON", "avg": "0.007013", "balance": "0.0", "lastpay": "5.95", "place": "دحلة الجوازي", "lat": 26.32559214, "lng": 40.99942851}, {"account": "2293459942", "name": "علي سعيد سعيد الوقدان", "branch": "الحائط", "meter": "88595592", "status": "ON", "avg": "0.438825", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.98568207, "lng": 40.46221571}, {"account": "6647646264", "name": "متعبه مرشد قاسم الرشيدي", "branch": "الحائط", "meter": "88578949", "status": "ON", "avg": "0.000723", "balance": "5.95", "lastpay": "5.75", "place": "ام شعاري", "lat": 25.88340111, "lng": 40.25392612}, {"account": "6128000014", "name": "جهز مريزيق شويط الرشيدي العايضي", "branch": "الحائط", "meter": "87976606", "status": "ON", "avg": "1.5", "balance": "78.3", "lastpay": "5.75", "place": "", "lat": 26.1740539496529, "lng": 40.9389132363726}, {"account": "6677914884", "name": "فواز غلاب فايد البراك الرشيدي", "branch": "الحائط", "meter": "88648469", "status": "ON", "avg": "0.492987", "balance": "11.7", "lastpay": "5.75", "place": "المثواة الجديدة", "lat": 26.32192635, "lng": 40.99053363}, {"account": "5718000014", "name": "أحمد حمد صلبي الرشيدي الداموكي", "branch": "الحائط", "meter": "87976833", "status": "OFF", "avg": "0.386841", "balance": "0.0", "lastpay": "5.18", "place": "", "lat": 26.4584352495773, "lng": 41.0879594227936}, {"account": "6579834088", "name": "عايد عبدالله عيد الرشيدي", "branch": "الحائط", "meter": "88578953", "status": "ON", "avg": "0.007404", "balance": "5.95", "lastpay": "5.75", "place": "ام شعاري", "lat": 25.87203847, "lng": 40.23385489}, {"account": "5831165730", "name": "محمد بن فالح بن مريبد القلادي الرشيدي", "branch": "الحائط", "meter": "88648446", "status": "ON", "avg": "0.023894", "balance": "0.0", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.99975875, "lng": 40.81767827}, {"account": "5544455210", "name": "عثمان بن محمد بن سبهان الشويلعي الرشيدي", "branch": "الحائط", "meter": "88648701", "status": "ON", "avg": "0.136065", "balance": "5.78", "lastpay": "5.75", "place": "الوسعة", "lat": 26.13655333, "lng": 40.53061198}, {"account": "7107237086", "name": "محمد بن فالح بن مريبد القلادي الرشيدي", "branch": "الحائط", "meter": "88657828", "status": "ON", "avg": "0.003108", "balance": "0.0", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.99976442, "lng": 40.81762295}, {"account": "7507512674", "name": "عبيد ملاح بن عبيد الرشيدى اشويلعي", "branch": "الحائط", "meter": "88579122", "status": "ON", "avg": "1.25", "balance": "0.0", "lastpay": "5.95", "place": "ام شعاري", "lat": 25.87438587, "lng": 40.24586968}, {"account": "8484460966", "name": "موسي مناور درع الحايطي", "branch": "الحائط", "meter": "87966296", "status": "ON", "avg": "1.24791", "balance": "0.0", "lastpay": "5.99", "place": "", "lat": 25.98356936, "lng": 40.46101572}, {"account": "9668664394", "name": "عوض ماطر ناجي الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884247", "status": "ON", "avg": "0.147517", "balance": "9.96", "lastpay": "5.84", "place": "الوسعة", "lat": 26.15030353, "lng": 40.51770352}, {"account": "9153514202", "name": "سالم صالح سالم الضيدان", "branch": "الحائط", "meter": "88648495", "status": "OFF", "avg": "0.505469", "balance": "0.0", "lastpay": "5.75", "place": "", "lat": 25.9849070008967, "lng": 40.4625330000191}, {"account": "971941320", "name": "مبارك علي سعيد المحيسن", "branch": "الحائط", "meter": "55900240", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.992997, "lng": 40.475499}, {"account": "9679000014", "name": "علي الرشيدي", "branch": "الحائط", "meter": "31509278", "status": "ON", "avg": "0.031", "balance": "0.0", "lastpay": "5.75", "place": "الحماد", "lat": 26.13993944, "lng": 40.90684532}, {"account": "9669907414", "name": "خالد مقحم محسن السبيعي العنزي", "branch": "الحائط", "meter": "10829140", "status": "ON", "avg": "0.194627", "balance": "6.52", "lastpay": "6.1", "place": "الحليفةالسفلى", "lat": 25.994456, "lng": 40.821541}, {"account": "6432727274", "name": "فالح محمد سعد الشويلعي الرشيدي", "branch": "الحائط", "meter": "10893786", "status": "ON", "avg": "0.14792", "balance": "20.27", "lastpay": "5.75", "place": "الوسعة", "lat": 26.12891606, "lng": 40.52808333}, {"account": "9143287404", "name": "حبيب بن نهار بن مسلم الحايطي", "branch": "الحائط", "meter": "55863169", "status": "ON", "avg": "0.232956", "balance": "12.39", "lastpay": "6.19", "place": "الحائط", "lat": 25.981705, "lng": 40.471314}, {"account": "2801043268", "name": "فريح غنيمان سالم الرشيدي", "branch": "الحائط", "meter": "10829348", "status": "OFF", "avg": "0.024478", "balance": "22.88", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.988286, "lng": 40.806677}, {"account": "377000014", "name": "عبدالله محمد سمير الرشيدي", "branch": "الحائط", "meter": "51798112", "status": "ON", "avg": "0.246855", "balance": "5.95", "lastpay": "5.75", "place": "الحماد", "lat": 26.141604, "lng": 40.909033}, {"account": "5378243254", "name": "نوره نهار مسلم الحايطي", "branch": "الحائط", "meter": "31512059", "status": "ON", "avg": "0.251908", "balance": "5.95", "lastpay": "5.75", "place": "الحائط", "lat": 25.9932222, "lng": 40.4695556}, {"account": "9385282269", "name": "رايد خلف غنام الرشيدى", "branch": "الحائط", "meter": "10884448", "status": "ON", "avg": "0.485813", "balance": "110.24", "lastpay": "6.08", "place": "الوسعة", "lat": 26.15124993, "lng": 40.53112856}, {"account": "1893411686", "name": "محفوظ بن بركه بن هديبان العنتري", "branch": "الحائط", "meter": "65096565", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.996689, "lng": 40.821589}, {"account": "3407212406", "name": "صويلح الرشيدي", "branch": "الحائط", "meter": "10884154", "status": "ON", "avg": "0.074342", "balance": "6.42", "lastpay": "6.0", "place": "الوسعة", "lat": 26.14123779, "lng": 40.50911793}, {"account": "7609000014", "name": "شداد ذعار داموك الرشيدي الدواميك", "branch": "الحائط", "meter": "55894591", "status": "ON", "avg": "0.032942", "balance": "0.0", "lastpay": "5.91", "place": "الحماد", "lat": 26.14320624, "lng": 40.90927225}, {"account": "6097581870", "name": "حماد عائش مناور الرشيدي", "branch": "الحائط", "meter": "51519927", "status": "ON", "avg": "0.17537", "balance": "10.93", "lastpay": "6.33", "place": "الحماد", "lat": 26.15475169, "lng": 40.9039353}, {"account": "1738000014", "name": "سعيده محمد ناهس بن براك", "branch": "الحائط", "meter": "51783461", "status": "OFF", "avg": "1.5", "balance": "0.0", "lastpay": "5.75", "place": "مرغان", "lat": 26.1669273, "lng": 40.92799997}, {"account": "8610454552", "name": "نواف فالح دغيليب  الرشيدي", "branch": "الحائط", "meter": "10807339", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 26.00493313, "lng": 40.81844025}, {"account": "9152060574", "name": "منصور مقحم محسن العنزي السبيعي", "branch": "الحائط", "meter": "10829324", "status": "OFF", "avg": "0.372151", "balance": "64.05", "lastpay": "5.95", "place": "الحليفةالسفلى", "lat": 25.995295, "lng": 40.819547}, {"account": "3946951190", "name": "سعود راشد رخي السلامة", "branch": "الحائط", "meter": "55899636", "status": "OFF", "avg": "1.5", "balance": "8448.44", "lastpay": "6.33", "place": "الحائط", "lat": 25.988431, "lng": 40.461369}, {"account": "6039115312", "name": "مريم عيد عبود الرشيدي", "branch": "الحائط", "meter": "10884451", "status": "ON", "avg": "0.083139", "balance": "5.78", "lastpay": "5.78", "place": "الوسعة", "lat": 26.15072954, "lng": 40.5298644}, {"account": "8219278782", "name": "عواض عوض النفيخ الرشيدي", "branch": "الحائط", "meter": "55894960", "status": "ON", "avg": "0.261033", "balance": "18.35", "lastpay": "6.28", "place": "البركة", "lat": 26.466648, "lng": 41.088954}, {"account": "7283450390", "name": "حويط معيتق حويط الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884414", "status": "ON", "avg": "1.25", "balance": "0.0", "lastpay": "5.75", "place": "الوسعة", "lat": 26.140856, "lng": 40.531755}, {"account": "3024407380", "name": "محمد نافع مسلط السبيعي العنزي", "branch": "الحائط", "meter": "10838458", "status": "ON", "avg": "0.120583", "balance": "5.82", "lastpay": "6.01", "place": "الحائط", "lat": 25.995209, "lng": 40.464978}, {"account": "4084573504", "name": "جميعان سعيد حجي الحجي", "branch": "الحائط", "meter": "10836307", "status": "ON", "avg": "0.023231", "balance": "17.45", "lastpay": "5.55", "place": "الحائط", "lat": 25.992825, "lng": 40.47041}, {"account": "8888000014", "name": "مها رشيد جمعان الرشيدي الداموك", "branch": "الحائط", "meter": "51826453", "status": "OFF", "avg": "1.5", "balance": "5.18", "lastpay": "6.33", "place": "الحماد", "lat": 26.1409422, "lng": 40.90893728}, {"account": "3157465878", "name": "ثويني عيسى ثويني الحايطي", "branch": "الحائط", "meter": "55894125", "status": "ON", "avg": "0.087589", "balance": "19.22", "lastpay": "5.91", "place": "الحائط", "lat": 25.987151, "lng": 40.476146}, {"account": "7616541384", "name": "سعاد محمد عيد الحايطي", "branch": "الحائط", "meter": "31512058", "status": "ON", "avg": "0.424277", "balance": "15.54", "lastpay": "5.75", "place": "الحائط", "lat": 25.9904942, "lng": 40.4646454}, {"account": "3097929274", "name": "دحيم الرشيدي", "branch": "الحائط", "meter": "10829106", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.994657, "lng": 40.810448}, {"account": "7249009892", "name": "ورثة عايض عوض رويشد الرشيدي", "branch": "الحائط", "meter": "10807470", "status": "ON", "avg": "0.305518", "balance": "5.82", "lastpay": "5.97", "place": "الحليفةالسفلى", "lat": 25.991834, "lng": 40.807329}, {"account": "5239379678", "name": "عبدالرحمن كاتب صالح الرشيدي القلادي", "branch": "الحليفة", "meter": "70402158", "status": "ON", "avg": "1.5", "balance": "0.0", "lastpay": "5.95", "place": "", "lat": 25.9463670011318, "lng": 40.7236659998994}, {"account": "5678000014", "name": "هيماء ابراهيم ثاني الرشيدي", "branch": "الحائط", "meter": "51783329", "status": "ON", "avg": "0.290841", "balance": "18.43", "lastpay": "5.33", "place": "مرغان", "lat": 26.17481425, "lng": 40.92685078}, {"account": "6628437744", "name": "عبدالرحمن عايض بن ضافي الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884531", "status": "ON", "avg": "4.8e-05", "balance": "17.25", "lastpay": "5.75", "place": "الوسعة", "lat": 26.140911, "lng": 40.525544}, {"account": "5572140062", "name": "ماجد نصار ناصر الشمري السعد", "branch": "الحائط", "meter": "55863096", "status": "ON", "avg": "0.103278", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.98895, "lng": 40.479639}, {"account": "2036539108", "name": "أحمد فرحان عويد الرشيدي", "branch": "الحائط", "meter": "87749546", "status": "ON", "avg": "0.637313", "balance": "22.6", "lastpay": "5.8", "place": "الحليفةالسفلى", "lat": 25.998003, "lng": 40.81371203}, {"account": "8414573878", "name": "عبيان اسماعيل عبيان شويلعي الرشيدي", "branch": "الحائط", "meter": "10884306", "status": "ON", "avg": "1.5", "balance": "0.0", "lastpay": "5.75", "place": "الوسعة", "lat": 26.138814, "lng": 40.530965}, {"account": "3703460560", "name": "وليد عبدالرحمن جميعان الحائطي", "branch": "الحائط", "meter": "55863051", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.986596, "lng": 40.478215}, {"account": "5727335368", "name": "مقبل سلمان عايش الرشيدي", "branch": "الحائط", "meter": "55899625", "status": "ON", "avg": "0.255759", "balance": "0.0", "lastpay": "6.11", "place": "الحائط", "lat": 25.978643, "lng": 40.455069}, {"account": "2992115130", "name": "راشد خيران جدعان المهيمزي رشيدي", "branch": "الحائط", "meter": "10807518", "status": "OFF", "avg": "1.5", "balance": "344.25", "lastpay": "5.95", "place": "الحليفةالسفلى", "lat": 25.99287, "lng": 40.813245}, {"account": "6105413350", "name": "عواض غنام هشم الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884280", "status": "ON", "avg": "0.891916", "balance": "5.95", "lastpay": "5.75", "place": "الوسعة", "lat": 26.138047, "lng": 40.529001}, {"account": "2055444812", "name": "سويلم عيسي ثويني الحسن", "branch": "الحائط", "meter": "87749807", "status": "ON", "avg": "0.029375", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.982777, "lng": 40.468053}, {"account": "2015853008", "name": "فاطمه سويلم سالم الحايطي", "branch": "الحائط", "meter": "55863056", "status": "ON", "avg": "0.077104", "balance": "0.0", "lastpay": "6.04", "place": "الحائط", "lat": 25.987111, "lng": 40.464947}, {"account": "5889000014", "name": "مصلح عبدالله الحميدي الرشيدي", "branch": "الحائط", "meter": "55905708", "status": "ON", "avg": "0.006652", "balance": "0.0", "lastpay": "5.75", "place": "البركة", "lat": 26.464644, "lng": 41.106734}, {"account": "2803589491", "name": "عبدالله الرشيدي", "branch": "الحائط", "meter": "10828957", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.55", "place": "الحليفةالسفلى", "lat": 25.992711, "lng": 40.820035}, {"account": "9843428818", "name": "ماجد مرشد سعود الرشيدي", "branch": "الحائط", "meter": "55905975", "status": "ON", "avg": "0.0248", "balance": "0.0", "lastpay": "5.75", "place": "البركة", "lat": 26.467737, "lng": 41.104492}, {"account": "7671936564", "name": "مرزوق دغيليب مرزوق الرشيدي", "branch": "الحائط", "meter": "10829050", "status": "ON", "avg": "0.194935", "balance": "0.0", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.999105, "lng": 40.815289}, {"account": "8205654336", "name": "علي سعيد سعيد الوقدان", "branch": "الحائط", "meter": "10846584", "status": "ON", "avg": "0.335144", "balance": "43.53", "lastpay": "6.39", "place": "الحائط", "lat": 25.995092, "lng": 40.47155}, {"account": "7818308610", "name": "لطيفه حمود فرحان الحايطي", "branch": "الحائط", "meter": "55905573", "status": "ON", "avg": "0.296563", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.989428, "lng": 40.468486}, {"account": "419000014", "name": "صالح  عايض  عويد الرشيدي", "branch": "الحائط", "meter": "10829124", "status": "ON", "avg": "0.71929", "balance": "0.0", "lastpay": "6.39", "place": "الحليفةالسفلى", "lat": 25.990914, "lng": 40.807671}, {"account": "7078262488", "name": "سعد بن محمد بن ناهس بن براك", "branch": "الحائط", "meter": "51783453", "status": "ON", "avg": "0.138779", "balance": "0.0", "lastpay": "6.08", "place": "مرغان", "lat": 26.16656274, "lng": 40.92752684}, {"account": "3300799774", "name": "مشعان نهير رشدان الحائطي", "branch": "الحائط", "meter": "55900197", "status": "ON", "avg": "0.176424", "balance": "6.15", "lastpay": "5.75", "place": "الحائط", "lat": 25.985811, "lng": 40.467673}, {"account": "4139000014", "name": "خالد بن فضي بن حنيفان رشيدي الجريشي", "branch": "الحائط", "meter": "55899862", "status": "ON", "avg": "0.342728", "balance": "6.82", "lastpay": "6.01", "place": "البركة", "lat": 26.4597608, "lng": 41.0925755}, {"account": "6148216902", "name": "منور عايض سميحان الحايطي", "branch": "الحائط", "meter": "10784791", "status": "ON", "avg": "0.046521", "balance": "0.0", "lastpay": "6.05", "place": "الحائط", "lat": 25.992563, "lng": 40.473434}, {"account": "7088412190", "name": "عوض عايض بن عطيوي الحائطي", "branch": "الحائط", "meter": "10836155", "status": "ON", "avg": "0.019296", "balance": "0.0", "lastpay": "5.95", "place": "الحائط", "lat": 25.995041, "lng": 40.464165}, {"account": "508862780", "name": "العنود صالح عبدالرحمن الحايطي", "branch": "الحائط", "meter": "55867540", "status": "ON", "avg": "0.693715", "balance": "55.15", "lastpay": "6.38", "place": "الحائط", "lat": 25.983048, "lng": 40.463467}, {"account": "6415001778", "name": "ورثه عبدالله صعفق دوخي العنزي", "branch": "الحائط", "meter": "10828924", "status": "ON", "avg": "0.397545", "balance": "0.0", "lastpay": "5.84", "place": "الحليفةالسفلى", "lat": 25.993106, "lng": 40.814928}, {"account": "3328000014", "name": "صالح بن عبدالله بن محمد الرشيدي", "branch": "الحائط", "meter": "51798185", "status": "ON", "avg": "0.00215", "balance": "5.75", "lastpay": "5.75", "place": "الحماد", "lat": 26.14106423, "lng": 40.90993895}, {"account": "6281069190", "name": "دليل مرزوق عبيد الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884226", "status": "ON", "avg": "0.299896", "balance": "6.06", "lastpay": "6.28", "place": "الوسعة", "lat": 26.13527001, "lng": 40.53129703}, {"account": "8370927208", "name": "رشيد رشيد سعدون الحائطي", "branch": "الحائط", "meter": "55867549", "status": "ON", "avg": "1.25", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.982768, "lng": 40.473202}, {"account": "8012514426", "name": "عبدالعزيز حميد ابراهيم الرشيدي", "branch": "الحائط", "meter": "10884444", "status": "ON", "avg": "0.272589", "balance": "5.93", "lastpay": "5.75", "place": "الوسعة", "lat": 26.15061237, "lng": 40.53038458}, {"account": "4606146170", "name": "عبدالرزاق الرشيدي", "branch": "الحائط", "meter": "88688491", "status": "ON", "avg": "0.059827", "balance": "0.0", "lastpay": "6.37", "place": "البركة", "lat": 26.45032798, "lng": 41.0911702}, {"account": "6456485978", "name": "مريم عوض حويان الحايطي", "branch": "الحائط", "meter": "55863057", "status": "ON", "avg": "1.5", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.982185, "lng": 40.472189}, {"account": "421577104", "name": "عبدالمجيد محمد عطيوي الحايطي", "branch": "الحائط", "meter": "10784784", "status": "ON", "avg": "0.201507", "balance": "6.99", "lastpay": "6.05", "place": "الحائط", "lat": 25.997873, "lng": 40.472133}, {"account": "9867504274", "name": "لحيدان عيسى لحيدان الحائطي", "branch": "الحائط", "meter": "55863225", "status": "ON", "avg": "0.041997", "balance": "5.75", "lastpay": "5.92", "place": "الحائط", "lat": 25.982273, "lng": 40.471601}, {"account": "4948260002", "name": "متعب خضران عياضه الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884270", "status": "ON", "avg": "1.25", "balance": "0.0", "lastpay": "5.75", "place": "الوسعة", "lat": 26.139563, "lng": 40.53071}, {"account": "5216063788", "name": "مشل نافع مزعل الشميلاني الرشيدي", "branch": "الحائط", "meter": "10836805", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحليفة العليا", "lat": 25.94059, "lng": 40.741915}, {"account": "1691500050", "name": "سعديه فرحان عويد الرشيدي", "branch": "الحائط", "meter": "55900377", "status": "ON", "avg": "1.5", "balance": "28.95", "lastpay": "5.75", "place": "مرغان", "lat": 26.17035906, "lng": 40.92898533}, {"account": "6851977760", "name": "ابراهيم بن علي بن محمد الحريقي", "branch": "الحائط", "meter": "55905559", "status": "ON", "avg": "0.047848", "balance": "5.88", "lastpay": "5.76", "place": "الحائط", "lat": 25.989033, "lng": 40.467675}, {"account": "8490311392", "name": "صالح عنيزان عوض رشيدي", "branch": "الحائط", "meter": "10828974", "status": "ON", "avg": "0.085468", "balance": "0.0", "lastpay": "6.04", "place": "الحليفةالسفلى", "lat": 25.999074, "lng": 40.821714}, {"account": "6044803817", "name": "فهد هني مسلم الشطنان الرشيدي", "branch": "الحائط", "meter": "88712078", "status": "ON", "avg": "0.538726", "balance": "0.0", "lastpay": "6.43", "place": "البركة", "lat": 26.4666972, "lng": 41.0871875}, {"account": "8869000014", "name": "سميحان دخيل جدعان الرشيدي المضيبري", "branch": "الحائط", "meter": "51798193", "status": "ON", "avg": "0.199533", "balance": "0.0", "lastpay": "6.27", "place": "مرغان", "lat": 26.18335716, "lng": 40.92778366}, {"account": "5539000014", "name": "سعود سعيد عيد الرشيدى العويمري", "branch": "الحائط", "meter": "55899865", "status": "ON", "avg": "0.043172", "balance": "5.75", "lastpay": "5.75", "place": "البركة", "lat": 26.459768, "lng": 41.090775}, {"account": "4828000014", "name": "عبدالكريم عبدالرحمن عبدالكريم الحائطي", "branch": "الحائط", "meter": "10836793", "status": "OFF", "avg": "0.237057", "balance": "147.67", "lastpay": "6.01", "place": "الحائط", "lat": 25.995072, "lng": 40.472885}, {"account": "4577296282", "name": "سالم سويلم سالم الضيدان", "branch": "الحائط", "meter": "31511998", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.985171, "lng": 40.462525}, {"account": "2378606564", "name": "فرج خيرالله مدهاس الرشيدي", "branch": "الحائط", "meter": "10829247", "status": "ON", "avg": "0.958162", "balance": "7.22", "lastpay": "6.44", "place": "الحليفةالسفلى", "lat": 25.991345, "lng": 40.807528}, {"account": "4297600952", "name": "حادي حويدي صالح الرشيدي", "branch": "الحائط", "meter": "88648280", "status": "ON", "avg": "0.088497", "balance": "0.0", "lastpay": "6.27", "place": "الحليفةالسفلى", "lat": 25.99961991, "lng": 40.81662967}, {"account": "3363468752", "name": "صالح سالم عايد الرشيدي", "branch": "الحائط", "meter": "10829234", "status": "ON", "avg": "0.146788", "balance": "6.42", "lastpay": "6.35", "place": "الحليفةالسفلى", "lat": 25.99745, "lng": 40.814014}, {"account": "6984897690", "name": "محيسن الحايطى", "branch": "الحائط", "meter": "55865366", "status": "ON", "avg": "0.082759", "balance": "0.0", "lastpay": "5.83", "place": "الحائط", "lat": 25.988006, "lng": 40.479487}, {"account": "4180818730", "name": "رويشد سعد عوض الرشيدي القلادي", "branch": "الحائط", "meter": "10807273", "status": "ON", "avg": "0.309149", "balance": "0.0", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.995652, "lng": 40.815142}, {"account": "9333086870", "name": "صالح سعيد محيسن البركه", "branch": "الحائط", "meter": "55905853", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.988498, "lng": 40.474296}, {"account": "1617995892", "name": "خالد مزعل ضاحي الحائطي", "branch": "الحائط", "meter": "55900493", "status": "OFF", "avg": "1.5", "balance": "140.0", "lastpay": "5.18", "place": "الحائط", "lat": 25.983236, "lng": 40.459815}, {"account": "5867677028", "name": "احمد غالب غلاب العنزي", "branch": "الحائط", "meter": "65096702", "status": "ON", "avg": "1.5", "balance": "-307.0", "lastpay": "5.95", "place": "الحليفةالسفلى", "lat": 25.992937, "lng": 40.817965}, {"account": "9986035224", "name": "محمد نافع مسلط السبيعي العنزي", "branch": "الحائط", "meter": "55900557", "status": "ON", "avg": "0.149474", "balance": "5.92", "lastpay": "5.91", "place": "الحائط", "lat": 25.987102, "lng": 40.466733}, {"account": "1299000014", "name": "عوض فالح بنيه الرشيدي", "branch": "الحائط", "meter": "55905714", "status": "ON", "avg": "0.129234", "balance": "0.0", "lastpay": "5.75", "place": "البركة", "lat": 26.457652, "lng": 41.0985}, {"account": "6223000014", "name": "نشمي علي سبيل الرشيدي القلادي", "branch": "الحائط", "meter": "55899506", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "البركة", "lat": 26.462095, "lng": 41.095664}, {"account": "1486527482", "name": "عواض عوض النفيخ الرشيدي", "branch": "الحائط", "meter": "55894961", "status": "ON", "avg": "0.079892", "balance": "17.84", "lastpay": "5.75", "place": "البركة", "lat": 26.466143, "lng": 41.089693}, {"account": "8525719374", "name": "عبدالعزيز بن مشعان بن مرزوق الحايطي", "branch": "الحائط", "meter": "70379345", "status": "ON", "avg": "0.003675", "balance": "-307.0", "lastpay": "5.95", "place": "الحائط", "lat": 25.991234, "lng": 40.465942}, {"account": "5527595052", "name": "مهلاء روحيل سالم العازمي", "branch": "الحائط", "meter": "10829241", "status": "ON", "avg": "0.016484", "balance": "11.5", "lastpay": "5.76", "place": "الحليفةالسفلى", "lat": 25.998195, "lng": 40.817083}, {"account": "8075335192", "name": "هدى الحضن مرزوق الرشيدي", "branch": "الحائط", "meter": "10829045", "status": "ON", "avg": "0.827153", "balance": "5.75", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.998959, "lng": 40.815313}, {"account": "8673394866", "name": "موضي موسى خليف الحايطي", "branch": "الحائط", "meter": "55900175", "status": "ON", "avg": "0.222037", "balance": "10.37", "lastpay": "6.15", "place": "الحائط", "lat": 25.987633, "lng": 40.465715}, {"account": "9999133496", "name": "ورثة محمد عيد خلف الحائطي", "branch": "الحائط", "meter": "10784782", "status": "ON", "avg": "0.277399", "balance": "5.95", "lastpay": "5.75", "place": "الحائط", "lat": 25.996703, "lng": 40.470209}, {"account": "2572780480", "name": "حسين الرشيدي", "branch": "الحائط", "meter": "10829080", "status": "ON", "avg": "0.016214", "balance": "0.0", "lastpay": "5.81", "place": "الحليفةالسفلى", "lat": 26.001032, "lng": 40.804625}, {"account": "7943346832", "name": "بدر عواد مناور الحجيلي", "branch": "الحائط", "meter": "10829333", "status": "ON", "avg": "0.302244", "balance": "25.93", "lastpay": "5.98", "place": "الحليفةالسفلى", "lat": 25.994233, "lng": 40.81005}, {"account": "2181917010", "name": "عوض عايض بن عطيوي الحائطي", "branch": "الحائط", "meter": "55900211", "status": "ON", "avg": "0.181742", "balance": "0.0", "lastpay": "6.19", "place": "الحائط", "lat": 25.987762, "lng": 40.464781}, {"account": "5117568746", "name": "ثنيان قبيان عتيق الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884206", "status": "ON", "avg": "0.172424", "balance": "0.0", "lastpay": "5.75", "place": "الوسعة", "lat": 26.142814, "lng": 40.537361}, {"account": "1469000014", "name": "نوير مهمل حامد الرشيدي", "branch": "الحائط", "meter": "55905954", "status": "OFF", "avg": "1.5", "balance": "0.0", "lastpay": "5.75", "place": "البركة", "lat": 26.453178, "lng": 41.091147}, {"account": "4609000014", "name": "خالد عتيق عوض الرشيدي", "branch": "الحائط", "meter": "55899490", "status": "ON", "avg": "0.212351", "balance": "0.0", "lastpay": "6.1", "place": "البركة", "lat": 26.454298, "lng": 41.089391}, {"account": "6587970836", "name": "عائشه مناور صالح الحايطى", "branch": "الحائط", "meter": "10846560", "status": "ON", "avg": "0.692233", "balance": "13.49", "lastpay": "1.18", "place": "الحائط", "lat": 25.993662, "lng": 40.466292}, {"account": "644001088", "name": "منصور بن علي بن عنيزان رشيدي الشميلان", "branch": "الحائط", "meter": "10849555", "status": "ON", "avg": "0.113428", "balance": "0.0", "lastpay": "5.95", "place": "الحليفة العليا", "lat": 25.95109507, "lng": 40.73765924}, {"account": "9149000014", "name": "مساعد ناصر  عوض الرشيدي", "branch": "الحائط", "meter": "51826460", "status": "ON", "avg": "1.5", "balance": "11.5", "lastpay": "5.75", "place": "مرغان", "lat": 26.17718427, "lng": 40.92940902}, {"account": "9792301346", "name": "مطر عويد سليم الرشيدي", "branch": "الحائط", "meter": "10884153", "status": "ON", "avg": "0.39523", "balance": "6.6", "lastpay": "6.21", "place": "الوسعة", "lat": 26.140985, "lng": 40.533855}, {"account": "4088892486", "name": "عبدالله محمد فارس العنزي السبيعي", "branch": "الحائط", "meter": "10829094", "status": "ON", "avg": "0.213118", "balance": "6.7", "lastpay": "5.91", "place": "الحليفةالسفلى", "lat": 25.990652, "lng": 40.816946}, {"account": "1852967454", "name": "عياد محمد شطيط المبارك", "branch": "الحائط", "meter": "55900546", "status": "ON", "avg": "0.0273", "balance": "5.93", "lastpay": "5.75", "place": "الحائط", "lat": 25.98746, "lng": 40.465415}, {"account": "737055598", "name": "حسن بطين عاتق الحايطي", "branch": "الحائط", "meter": "55863177", "status": "ON", "avg": "2.0327", "balance": "739.8", "lastpay": "5.75", "place": "الحائط", "lat": 25.98492962, "lng": 40.46543466}, {"account": "2729731402", "name": "متعب خضران عياضه الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884363", "status": "ON", "avg": "0.276696", "balance": "5.82", "lastpay": "6.14", "place": "الوسعة", "lat": 26.13462171, "lng": 40.50460093}, {"account": "2634204106", "name": "حمده حمد محمد الرشيدي", "branch": "الحائط", "meter": "10836808", "status": "ON", "avg": "1.605683", "balance": "11.7", "lastpay": "5.95", "place": "الحليفة العليا", "lat": 25.95094164, "lng": 40.73952564}, {"account": "2128557422", "name": "مها عابد محمد الشويلعي الرشيدي", "branch": "الحائط", "meter": "10884433", "status": "ON", "avg": "0.153562", "balance": "0.0", "lastpay": "5.78", "place": "الوسعة", "lat": 26.141561, "lng": 40.5348}, {"account": "9719000014", "name": "مخلفه بلال عايض الرشيدي", "branch": "الحائط", "meter": "55900099", "status": "ON", "avg": "0.000985", "balance": "5.75", "lastpay": "5.75", "place": "البركة", "lat": 26.45874154, "lng": 41.0934409}, {"account": "1048413990", "name": "عبد الرحمن عبدالله جميعان الحايطى", "branch": "الحائط", "meter": "55867574", "status": "ON", "avg": "0.063172", "balance": "6.12", "lastpay": "5.75", "place": "الحائط", "lat": 25.986727, "lng": 40.478198}, {"account": "1860566542", "name": "تركي غلاب باجح الرشيدي البراك", "branch": "الحائط", "meter": "51782925", "status": "ON", "avg": "1.724362", "balance": "0.0", "lastpay": "5.75", "place": "مرغان", "lat": 26.17251275, "lng": 40.93100006}, {"account": "8168893258", "name": "نشمي بن دغش بن مصلح الرشيدي", "branch": "الحائط", "meter": "10829157", "status": "ON", "avg": "0.213014", "balance": "0.0", "lastpay": "6.39", "place": "الحليفةالسفلى", "lat": 25.99432285, "lng": 40.81279529}, {"account": "3702098720", "name": "بدر بذر مفرج الرشيدي", "branch": "الحائط", "meter": "87749534", "status": "ON", "avg": "0.327482", "balance": "0.0", "lastpay": "6.35", "place": "الحائط", "lat": 25.9952388, "lng": 40.4613993}, {"account": "4739570400", "name": "فاطمه سويلم سالم الحايطي", "branch": "الحائط", "meter": "55905533", "status": "ON", "avg": "1.5", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.985655, "lng": 40.46762}, {"account": "1804374512", "name": "بدر عبدالله سبهان الرشيدي", "branch": "الحائط", "meter": "10884276", "status": "ON", "avg": "0.211838", "balance": "0.0", "lastpay": "5.75", "place": "الوسعة", "lat": 26.142413, "lng": 40.529455}, {"account": "4766337568", "name": "صالح دغيمان سبيل القلادي الرشيدي", "branch": "الحائط", "meter": "65169923", "status": "ON", "avg": "1.283921", "balance": "0.0", "lastpay": "5.75", "place": "الحليفة العليا", "lat": 25.9452264, "lng": 40.724045}, {"account": "5900649154", "name": "عبيان اسماعيل عبيان شويلعي الرشيدي", "branch": "الحائط", "meter": "10884445", "status": "ON", "avg": "0.023239", "balance": "0.0", "lastpay": "5.76", "place": "الوسعة", "lat": 26.130877, "lng": 40.50869}, {"account": "4770545290", "name": "علي مناور محمد الحائطي", "branch": "الحائط", "meter": "55863213", "status": "OFF", "avg": "0.108252", "balance": "6.13", "lastpay": "6.08", "place": "الحائط", "lat": 25.988695, "lng": 40.478843}, {"account": "2695735396", "name": "فيصل عوض احمد الرشيدي القلادي", "branch": "الحائط", "meter": "10829109", "status": "ON", "avg": "0.07626", "balance": "6.0", "lastpay": "6.24", "place": "الحليفةالسفلى", "lat": 25.991834, "lng": 40.808123}, {"account": "909000014", "name": "ورثة صالح خالد الشمري", "branch": "الحائط", "meter": "10836575", "status": "OFF", "avg": "0.202721", "balance": "6.37", "lastpay": "6.36", "place": "الحائط", "lat": 25.994338, "lng": 40.472995}, {"account": "8468261666", "name": "محمد خلف محمد الجابر", "branch": "الحائط", "meter": "55899652", "status": "ON", "avg": "0.176737", "balance": "0.0", "lastpay": "5.75", "place": "الحائط", "lat": 25.987869, "lng": 40.46429}, {"account": "9056249848", "name": "فيصل علي بن خداج العويمري الرشيدي", "branch": "الحائط", "meter": "10838461", "status": "OFF", "avg": "2.504667", "balance": "2726.9", "lastpay": "6.39", "place": "الحائط", "lat": 25.991552, "lng": 40.463209}, {"account": "3276755818", "name": "سعد محمد سعود رشيد الحايطى", "branch": "الحائط", "meter": "10838063", "status": "ON", "avg": "0.151389", "balance": "12.03", "lastpay": "6.23", "place": "الحائط", "lat": 25.992682, "lng": 40.463304}, {"account": "8921422750", "name": "عبدالله رشيد وريور الرشيدي", "branch": "الحائط", "meter": "10829061", "status": "ON", "avg": "0.281442", "balance": "6.07", "lastpay": "6.36", "place": "الحليفةالسفلى", "lat": 25.991716, "lng": 40.818573}, {"account": "8253552730", "name": "محمد نافع مسلط السبيعي العنزي", "branch": "الحائط", "meter": "30515076", "status": "ON", "avg": "0.106055", "balance": "5.84", "lastpay": "6.22", "place": "الحليفةالسفلى", "lat": 25.995538, "lng": 40.822388}, {"account": "4723787786", "name": "سليمان بن معيض بن فهد شويلعي الرشيدي", "branch": "الحائط", "meter": "10893787", "status": "ON", "avg": "1.25", "balance": "5.75", "lastpay": "5.75", "place": "الوسعة", "lat": 26.14091, "lng": 40.529521}, {"account": "7773923034", "name": "العود عيد دخيل شويلعي الرشيدي", "branch": "الحائط", "meter": "10884366", "status": "ON", "avg": "0.142672", "balance": "0.0", "lastpay": "6.37", "place": "الوسعة", "lat": 26.16097609, "lng": 40.50902205}, {"account": "9100411644", "name": "دحيم الرشيدي", "branch": "الحائط", "meter": "10829112", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.994858, "lng": 40.811495}, {"account": "9130226702", "name": "دحيم الرشيدي", "branch": "الحائط", "meter": "10829105", "status": "ON", "avg": "1.5", "balance": "5.75", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.99465, "lng": 40.810376}, {"account": "8896760728", "name": "فهد نماء عبدالعزيز الحايطى", "branch": "الحائط", "meter": "31512066", "status": "ON", "avg": "0.04379", "balance": "32.23", "lastpay": "6.44", "place": "الحائط", "lat": 25.98298, "lng": 40.467509}, {"account": "3908207636", "name": "رخي بن عبدالله بن رخي الحايطي بن سلامه", "branch": "الحائط", "meter": "55894227", "status": "ON", "avg": "0.217893", "balance": "20.22", "lastpay": "6.38", "place": "الحائط", "lat": 25.984415, "lng": 40.465129}, {"account": "9292151074", "name": "علي صالح عواض الرشيدي", "branch": "الحائط", "meter": "10884417", "status": "ON", "avg": "0.093237", "balance": "0.0", "lastpay": "6.35", "place": "الوسعة", "lat": 26.139049, "lng": 40.53453}, {"account": "179000014", "name": "هضيب منور حنوف الرشيدي الرويضي", "branch": "الحائط", "meter": "55894968", "status": "ON", "avg": "0.105992", "balance": "0.0", "lastpay": "5.75", "place": "البركة", "lat": 26.462717, "lng": 41.096903}, {"account": "2038521556", "name": "تركي متعب بن مفيض الحايطي", "branch": "الحائط", "meter": "55905674", "status": "ON", "avg": "0.150471", "balance": "6.23", "lastpay": "6.24", "place": "الحائط", "lat": 25.987402, "lng": 40.476204}, {"account": "7766605112", "name": "فهد سلامه حجي الحايطي", "branch": "الحائط", "meter": "55863122", "status": "ON", "avg": "0.503233", "balance": "6.08", "lastpay": "6.2", "place": "الحائط", "lat": 25.984951, "lng": 40.476124}, {"account": "3695097126", "name": "فاهد عبدالله صعفق العنزي السبيعي", "branch": "الحائط", "meter": "10828923", "status": "ON", "avg": "0.001169", "balance": "0.0", "lastpay": "5.75", "place": "الحليفةالسفلى", "lat": 25.993485, "lng": 40.814744}, {"account": "2696152484", "name": "عبدالله بن عطيه بن عليان الحايطي", "branch": "الحائط", "meter": "55900205", "status": "ON", "avg": "0.517008", "balance": "11.5", "lastpay": "5.75", "place": "الحائط", "lat": 25.990014, "lng": 40.465374}, {"account": "1179000014", "name": "هضيبان منور حنوف الرشيدي", "branch": "الحائط", "meter": "55894717", "status": "ON", "avg": "0.222611", "balance": "0.0", "lastpay": "6.41", "place": "البركة", "lat": 26.452135, "lng": 41.084181}, {"account": "9410274196", "name": "سبيل الحايطي", "branch": "الحائط", "meter": "55900179", "status": "ON", "avg": "0.172573", "balance": "0.0", "lastpay": "6.26", "place": "الحائط", "lat": 25.98754, "lng": 40.46661}, {"account": "4889000014", "name": "مصلح عبدالله الحميدي الرشيدي", "branch": "الحائط", "meter": "55905693", "status": "ON", "avg": "0.006189", "balance": "0.0", "lastpay": "5.75", "place": "البركة", "lat": 26.46459784, "lng": 41.1066568}, {"account": "6481206512", "name": "عبدالله بن مناور بن سميحان بن مناور الحايطى", "branch": "الحائط", "meter": "55863221", "status": "ON", "avg": "1.221513", "balance": "5.75", "lastpay": "5.75", "place": "الحائط", "lat": 25.988907, "lng": 40.478016}, {"account": "8808000014", "name": "عايشة خلف شامان الرشيدي", "branch": "الحائط", "meter": "51798067", "status": "ON", "avg": "0.797093", "balance": "5.95", "lastpay": "5.75", "place": "الحماد", "lat": 26.13932129, "lng": 40.90908053}, {"account": "1568000014", "name": "رشيد جمعان فالح الداموك الرشيدي", "branch": "الحائط", "meter": "51798254", "status": "ON", "avg": "1.5", "balance": "5.95", "lastpay": "5.75", "place": "الحماد", "lat": 26.14351024, "lng": 40.90863283}, {"account": "2806048580", "name": "تركي رشيد ملفي الرشيدي", "branch": "الحائط", "meter": "88648444", "status": "ON", "avg": "0.932381", "balance": "5.95", "lastpay": "5.75", "place": "وسيطاء دليم", "lat": 26.24633609, "lng": 40.97528335}];
+
+/* ============ STORAGE (Firestore + local fallback) ============ */
+const EMP_KEY = 'meters_emp_name';
+const PENDING_KEY = 'meters_notes_pending'; // notes saved locally while offline, not yet synced
+
+// live in-memory index built from Firestore real-time snapshot: { meterId: [entry, entry, ...] }
+let notesIndex = {};
+let firestoreReady = false;
+
+function getNotesFor(meterId){
+  return notesIndex[meterId] || [];
+}
+
+function loadPending(){
+  try{ return JSON.parse(localStorage.getItem(PENDING_KEY) || '{}'); }catch(e){ return {}; }
+}
+function savePendingEntry(meterId, entry){
+  const all = loadPending();
+  if(!all[meterId]) all[meterId] = [];
+  all[meterId].unshift(entry);
+  localStorage.setItem(PENDING_KEY, JSON.stringify(all));
+}
+
+// merge any locally-pending (offline) notes into the live index so nothing is lost from view
+function mergePendingIntoIndex(){
+  const pending = loadPending();
+  Object.keys(pending).forEach(meterId => {
+    if(!notesIndex[meterId]) notesIndex[meterId] = [];
+    pending[meterId].forEach(p => notesIndex[meterId].unshift(p));
+  });
+}
+
+// real-time listener: reflects every employee's notes on every device instantly
+notesCollection.orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+  const fresh = {};
+  snapshot.forEach(doc => {
+    const d = doc.data();
+    if(!fresh[d.meterId]) fresh[d.meterId] = [];
+    fresh[d.meterId].push({
+      employee: d.employee,
+      text: d.text,
+      photos: d.photos || [],
+      time: d.time
+    });
+  });
+  notesIndex = fresh;
+  mergePendingIntoIndex();
+  firestoreReady = true;
+  // if a meter's sheet is currently open, refresh its log live
+  if(currentMeter) renderNotesLog(currentMeter.meter);
+}, err => {
+  console.error('Firestore listener error:', err);
+  mergePendingIntoIndex();
+});
+
+async function addNoteFor(meterId, entry){
+  try{
+    await notesCollection.add({
+      meterId: meterId,
+      employee: entry.employee,
+      text: entry.text,
+      photos: entry.photos,
+      time: entry.time,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return true; // synced successfully, everyone will see it live
+  }catch(e){
+    console.error('Failed to sync note, saving locally:', e);
+    savePendingEntry(meterId, entry);
+    if(!notesIndex[meterId]) notesIndex[meterId] = [];
+    notesIndex[meterId].unshift(entry);
+    return false; // saved locally only, will not show for other employees
+  }
+}
+
+const empInput = document.getElementById('empName');
+empInput.value = localStorage.getItem(EMP_KEY) || '';
+empInput.addEventListener('input', () => localStorage.setItem(EMP_KEY, empInput.value.trim()));
+
+/* ============ MAP ============ */
+const map = L.map('map', { zoomControl:false, attributionControl:true }).setView([26.15,40.6], 10);
+L.control.zoom({ position:'bottomright' }).addTo(map);
+
+// Satellite imagery (Esri World Imagery), with an automatic fallback: if the tiles
+// fail to load on this network (blocked, timed out, etc.), we detect that from real
+// tile-load results on the user's own device and switch to a standard map that is
+// far more universally reachable — so the map always ends up usable either way.
+let satelliteTileOk = 0, satelliteTileFail = 0, fallbackActivated = false;
+
+const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom:19,
+  attribution:'Tiles &copy; Esri'
+});
+const satelliteLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom:19,
+  attribution:'',
+  opacity:0.9
+});
+const fallbackLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:19,
+  attribution:'&copy; OpenStreetMap'
+});
+
+satelliteLayer.addTo(map);
+satelliteLabels.addTo(map);
+
+const mapStatusEl = document.createElement('div');
+mapStatusEl.style.cssText = 'position:absolute; bottom:2px; right:8px; z-index:900; font-size:9px; color:rgba(255,255,255,.75); background:rgba(10,46,46,.55); padding:2px 6px; border-radius:6px; max-width:70%; text-align:right;';
+mapStatusEl.textContent = 'جارٍ تحميل خريطة الأقمار الصناعية...';
+document.querySelector('#map').parentElement.appendChild(mapStatusEl);
+
+function activateFallback(){
+  if(fallbackActivated) return;
+  fallbackActivated = true;
+  map.removeLayer(satelliteLayer);
+  map.removeLayer(satelliteLabels);
+  fallbackLayer.addTo(map);
+  mapStatusEl.textContent = '⚠ الأقمار الصناعية محجوبة على هذه الشبكة — تم التبديل لخريطة عادية';
+}
+
+satelliteLayer.on('load', () => {
+  mapStatusEl.textContent = 'الإصدار: 2026-08-25 · أقمار صناعية';
+  setTimeout(() => { if(!fallbackActivated) mapStatusEl.style.opacity = '0.5'; }, 4000);
+});
+satelliteLayer.on('tileerror', () => {
+  satelliteTileFail++;
+  if(satelliteTileFail >= 6 && satelliteTileOk === 0){
+    activateFallback();
+  }
+});
+satelliteLayer.on('tileload', () => { satelliteTileOk++; });
+
+// safety net: if after 6 seconds not a single satellite tile has loaded, switch anyway
+setTimeout(() => {
+  if(satelliteTileOk === 0 && !fallbackActivated){
+    activateFallback();
+  }
+}, 6000);
+
+const clusterGroup = L.markerClusterGroup({
+  iconCreateFunction: function(cluster){
+    return L.divIcon({
+      html: '<div class="marker-cluster-custom">'+cluster.getChildCount()+'</div>',
+      className:'', iconSize:[36,36]
+    });
+  },
+  maxClusterRadius: 55
+});
+
+function pinIcon(status){
+  const cls = status === 'ON' ? 'on' : 'off';
+  return L.divIcon({
+    className:'',
+    html:`<div class="meter-pin ${cls}"><div class="dot"></div></div>`,
+    iconSize:[26,26],
+    iconAnchor:[13,26],
+    popupAnchor:[0,-24]
+  });
+}
+
+const markersByMeter = {};
+const bounds = [];
+
+METERS.forEach(m => {
+  const marker = L.marker([m.lat, m.lng], { icon: pinIcon(m.status) });
+  marker.meterData = m;
+  marker.on('click', () => openSheet(m));
+  clusterGroup.addLayer(marker);
+  markersByMeter[m.meter] = marker;
+  bounds.push([m.lat, m.lng]);
+});
+map.addLayer(clusterGroup);
+if(bounds.length) map.fitBounds(bounds, { padding:[30,30] });
+
+/* Fix for blank/white map on mobile: Leaflet sometimes measures its container
+   before the page has finished laying out (especially inside flex containers
+   or right after the page loads on a phone). Forcing a resize check a moment
+   after load, and again on orientation/resize changes, makes the tiles and
+   drag/pan behavior render correctly. */
+function refreshMapSize(){
+  map.invalidateSize();
+  if(bounds.length) map.fitBounds(bounds, { padding:[30,30] });
+}
+window.addEventListener('load', () => setTimeout(refreshMapSize, 300));
+setTimeout(refreshMapSize, 800);
+setTimeout(refreshMapSize, 1500);
+setTimeout(refreshMapSize, 3000);
+window.addEventListener('resize', () => map.invalidateSize());
+window.addEventListener('orientationchange', () => setTimeout(() => map.invalidateSize(), 300));
+
+// Most robust fix: watch the map container itself and re-check its size the instant
+// it actually changes, instead of guessing fixed delays. This catches slow CDN loads,
+// slow layout on older phones, or the address bar hiding/showing on mobile Safari.
+if(window.ResizeObserver){
+  const mapContainerEl = document.getElementById('map');
+  const ro = new ResizeObserver(() => {
+    map.invalidateSize();
+  });
+  ro.observe(mapContainerEl);
+}
+
+document.getElementById('totalCount').textContent = `(${METERS.length} عداد)`;
+
+/* filter ON/OFF/ALL */
+let currentFilter = 'ALL';
+document.getElementById('filterBtn').addEventListener('click', () => {
+  currentFilter = currentFilter === 'ALL' ? 'ON' : currentFilter === 'ON' ? 'OFF' : 'ALL';
+  const btn = document.getElementById('filterBtn');
+  clusterGroup.clearLayers();
+  Object.values(markersByMeter).forEach(mk => {
+    if(currentFilter === 'ALL' || mk.meterData.status === currentFilter){
+      clusterGroup.addLayer(mk);
+    }
+  });
+  if(currentFilter === 'ALL'){ btn.textContent = 'الكل'; btn.classList.remove('active'); }
+  else { btn.textContent = currentFilter === 'ON' ? 'يعمل فقط' : 'متوقف فقط'; btn.classList.add('active'); }
+});
+
+/* locate me */
+document.getElementById('locateBtn').addEventListener('click', () => {
+  map.locate({ setView:true, maxZoom:16 });
+});
+map.on('locationfound', e => {
+  L.circleMarker(e.latlng, { radius:8, color:'#1d6fd9', fillColor:'#4d9dff', fillOpacity:.8 }).addTo(map);
+});
+map.on('locationerror', () => alert('تعذر تحديد موقعك، تأكد من تفعيل خدمة الموقع.'));
+
+/* ============ SEARCH ============ */
+const searchBox = document.getElementById('searchBox');
+const resultsBox = document.getElementById('searchResults');
+
+function norm(s){ return (s||'').toString().toLowerCase(); }
+
+searchBox.addEventListener('input', () => {
+  const q = norm(searchBox.value.trim());
+  if(!q){ resultsBox.style.display='none'; resultsBox.innerHTML=''; return; }
+  const found = METERS.filter(m =>
+    norm(m.meter).includes(q) ||
+    norm(m.account).includes(q) ||
+    norm(m.name).includes(q) ||
+    norm(m.place).includes(q)
+  ).slice(0, 30);
+
+  resultsBox.innerHTML = '';
+  if(found.length === 0){
+    resultsBox.innerHTML = '<div class="empty">لا توجد نتائج</div>';
+  } else {
+    found.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'item';
+      div.innerHTML = `<b>عداد ${m.meter}</b> — ${m.name}<div class="sub">${m.place || m.branch} · حساب ${m.account} · ${m.status === 'ON' ? '🟢 يعمل' : '🔴 متوقف'}</div>`;
+      div.addEventListener('click', () => {
+        resultsBox.style.display='none';
+        searchBox.value = '';
+        map.setView([m.lat, m.lng], 17);
+        setTimeout(() => openSheet(m), 300);
+      });
+      resultsBox.appendChild(div);
+    });
+  }
+  resultsBox.style.display = 'block';
+});
+
+/* ============ BOTTOM SHEET ============ */
+const overlay = document.getElementById('overlay');
+const sheet = document.getElementById('sheet');
+let currentMeter = null;
+let pendingPhotos = [];
+
+function fmt(v){
+  if(v === '' || v === null || v === undefined || v === 'nan') return '—';
+  return v;
+}
+
+function openSheet(m){
+  currentMeter = m;
+  pendingPhotos = [];
+  document.getElementById('photoPreviewWrap').innerHTML = '';
+  document.getElementById('noteText').value = '';
+  document.getElementById('saveMsg').textContent = '';
+
+  document.getElementById('shName').textContent = m.name || 'بدون اسم';
+  document.getElementById('shMeter').textContent = `رقم العداد: ${m.meter}`;
+  const badge = document.getElementById('shStatus');
+  badge.textContent = m.status === 'ON' ? 'يعمل' : 'متوقف';
+  badge.className = 'status-badge ' + (m.status === 'ON' ? 'on' : 'off');
+
+  document.getElementById('shAccount').textContent = fmt(m.account);
+  document.getElementById('shBranch').textContent = fmt(m.branch);
+  document.getElementById('shPlace').textContent = fmt(m.place);
+  document.getElementById('shAvg').textContent = fmt(m.avg);
+  document.getElementById('shBalance').textContent = fmt(m.balance);
+  document.getElementById('shLastpay').textContent = fmt(m.lastpay);
+
+  document.getElementById('gmapBtn').href = `https://www.google.com/maps/search/?api=1&query=${m.lat},${m.lng}`;
+
+  renderNotesLog(m.meter);
+
+  overlay.style.display = 'block';
+  sheet.classList.add('open');
+}
+
+function closeSheet(){
+  overlay.style.display = 'none';
+  sheet.classList.remove('open');
+  currentMeter = null;
+}
+document.getElementById('closeSheet').addEventListener('click', closeSheet);
+overlay.addEventListener('click', closeSheet);
+
+function renderNotesLog(meterId){
+  const list = getNotesFor(meterId);
+  const wrap = document.getElementById('notesLogList');
+  if(list.length === 0){
+    wrap.innerHTML = '<div class="noEntries">لا توجد ملاحظات سابقة لهذا العداد</div>';
+    return;
+  }
+  wrap.innerHTML = '';
+  list.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'noteEntry';
+    const imgsHtml = (n.photos && n.photos.length)
+      ? `<div class="imgs">${n.photos.map(p => `<img src="${p}">`).join('')}</div>` : '';
+    div.innerHTML = `<div class="meta"><b>${n.employee || 'غير محدد'}</b><span>${n.time}</span></div>
+      <div class="txt">${escapeHtml(n.text)}</div>${imgsHtml}`;
+    wrap.appendChild(div);
+  });
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+/* photo handling — resize + compress before storing so Firestore docs stay small and fast to sync */
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('photoInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  for(const file of files){
+    try{
+      const compressed = await compressImage(file, 900, 0.6);
+      pendingPhotos.push(compressed);
+      renderPendingPhotos();
+    }catch(err){
+      console.error('photo compress failed', err);
+    }
+  }
+  e.target.value = '';
+});
+
+function renderPendingPhotos(){
+  const wrap = document.getElementById('photoPreviewWrap');
+  wrap.innerHTML = '';
+  pendingPhotos.forEach((src, idx) => {
+    const box = document.createElement('div');
+    box.className = 'photoDel';
+    box.innerHTML = `<img src="${src}"><div class="x" data-idx="${idx}">✕</div>`;
+    box.querySelector('.x').addEventListener('click', () => {
+      pendingPhotos.splice(idx, 1);
+      renderPendingPhotos();
+    });
+    wrap.appendChild(box);
+  });
+}
+
+/* save note */
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  if(!currentMeter) return;
+  const text = document.getElementById('noteText').value.trim();
+  const emp = empInput.value.trim();
+  if(!emp){
+    document.getElementById('saveMsg').style.color = 'var(--off-color)';
+    document.getElementById('saveMsg').textContent = 'الرجاء إدخال اسم الموظف أولاً';
+    return;
+  }
+  if(!text && pendingPhotos.length === 0){
+    document.getElementById('saveMsg').style.color = 'var(--off-color)';
+    document.getElementById('saveMsg').textContent = 'اكتب ملاحظة أو أرفق صورة';
+    return;
+  }
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'جارٍ الحفظ...';
+
+  const now = new Date();
+  const entry = {
+    employee: emp,
+    text: text,
+    photos: pendingPhotos.slice(),
+    time: now.toLocaleString('ar-SA', { dateStyle:'medium', timeStyle:'short' })
+  };
+  const synced = await addNoteFor(currentMeter.meter, entry);
+
+  document.getElementById('noteText').value = '';
+  pendingPhotos = [];
+  renderPendingPhotos();
+  renderNotesLog(currentMeter.meter);
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = '💾 حفظ الملاحظة';
+
+  if(synced){
+    document.getElementById('saveMsg').style.color = 'var(--on-color)';
+    document.getElementById('saveMsg').textContent = '✔ تم الحفظ، وتظهر الآن لجميع الموظفين';
+  } else {
+    document.getElementById('saveMsg').style.color = 'var(--off-color)';
+    document.getElementById('saveMsg').textContent = '⚠ لا يوجد اتصال بالإنترنت — تم الحفظ على جهازك فقط مؤقتًا';
+  }
+});
+</script>
+</body>
+</html>
